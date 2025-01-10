@@ -1,7 +1,7 @@
 import cv2
 #import pymouse
 import dotenv
-from composition_ecran import composition_ecran
+from composition_ecran import composition_ecran, composant, auteur_sondage, bouton_fermer_reponse, bouton_voir_tout, option_reponse, personne_sondee, reponse_dev, sondage, voir_reponses_option
 from ultralytics import YOLO
 import os
 
@@ -83,7 +83,36 @@ def analyse_frames(frame):
         x1, y1, x2, y2 = box
         print(f"Box: ({x1}, {y1}, {x2}, {y2}), Confidence: {confidence:.2f}, Class: {class_id_to_name(int(class_id))}")
 
+    zip_boxes = zip(filtered_boxes, filtered_conf, filtered_cls)
+    # Construction d'un objet composition_ecran
+    for box in zip_boxes:
+        compo.ajouter_composant(make_component(box))
 
+def make_component(box):
+    # Box: (tensor([1112.8577,  704.6846,  207.5119,   53.7666]), tensor(0.9690), tensor(4.))
+    # On convertit les tensors en tuples
+    box = tuple(box[0].tolist())
+    confidence = box[1].item()
+    classe = int(box[2].item())
+
+    if classe == 0: # auteur_sondage
+        component = auteur_sondage(box)
+    elif classe == 1: # bouton_fermer_reponse
+        component = bouton_fermer_reponse(box)
+    elif classe == 2: # bouton_voir_tout
+        component = bouton_voir_tout(box)
+    elif classe == 3: # option_reponse
+        component = option_reponse(box)
+    elif classe == 4: # personne_sondee
+        component = personne_sondee(box)
+    elif classe == 5: # reponse_dev
+        component = reponse_dev(box)
+    elif classe == 6: # sondage
+        component = sondage(box)
+    elif classe == 7: # voir_reponses_option
+        component = voir_reponses_option(box)
+
+    return component
 
 
 def detecter_bboxes(frame):

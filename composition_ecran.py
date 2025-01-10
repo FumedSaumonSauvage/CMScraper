@@ -24,7 +24,10 @@ class composant:
         self.id = id_cooker.get_instance().get_new_id()
         self.position = position
         self.fils = []
+        self.parent = None
+        self.is_init = False # dit si un composant a été initialisé ou non
 
+    
     def is_bouton_voir_tout(self):
         return False
     
@@ -51,6 +54,10 @@ class composant:
     
     def ajouter_fils(self, fils):
         self.fils.append(fils)
+
+    def donner_parent(self, composant):
+        # initialise le parent du composant en question
+        self.parent = composant
 
     def est_contenu_dans(self, x, y, w, h):
         # Renvoie La proportion du composant qui est contenue si le composant en question est contenu dans la bbox passéen en arguments
@@ -81,6 +88,21 @@ class composant:
             return 0.0
 
         return aire_intersection / aire_boite1
+    
+    def verifier_integrite(self):
+        # Vérifie si le composant est intègre et a bien été initialisé
+        # Si la fonction est appellée ici, on a un problème
+        AssertionError("Impossible de vérifier l'intégrité d'un composant générique")
+    
+    def get_init_status(self):
+        # Vérifie si le composant a été initialisé
+        return self.is_init
+    
+    def set_init_status(self, status):
+        # Met à jour le statut d'initialisation du composant
+        self.is_init = status
+    
+
 
 
 class bouton_voir_tout(composant):
@@ -91,6 +113,11 @@ class bouton_voir_tout(composant):
     def is_bouton_voir_tout(self):
         return True
     
+    def verifier_integrite(self):
+        # Vérifie si le composant est intègre et a bien été initialisé
+        # Pas de fils, et un sondage comme parent
+        return (len(self.fils) == 0) and self.parent.is_sondage()
+    
 
 class bouton_fermer_reponse(composant):
 
@@ -100,6 +127,11 @@ class bouton_fermer_reponse(composant):
     def is_bouton_fermer_reponse(self):
         return True
     
+    def verifier_integrite(self):
+        # Vérifie si le composant est intègre et a bien été initialisé
+        # Pas de fils, et un père reponse_dev
+        return (len(self.fils) == 0) and self.parent.is_reponse_dev()
+
 
 class option_reponse(composant):
     
@@ -108,6 +140,11 @@ class option_reponse(composant):
 
     def is_option_reponse(self):
         return True
+    
+    def verifier_integrite(self):
+        # Vérifie si le composant est intègre et a bien été initialisé
+        # Un fils bouton pour voir les réponses, et un parent sondage
+        return (len(self.fils) == 1) and self.parent.is_sondage() and self.fils[0].is_is_voir_reponses_option()
         
 class personne_sondee(composant):
     
@@ -116,6 +153,11 @@ class personne_sondee(composant):
 
     def is_personne_sondee(self):
         return True
+    
+    def verifier_integrite(self):
+        # Vérifie si le composant est intègre et a bien été initialisé
+        # Pas de fils, et un parent reponse dev
+        return (len(self.fils) == 0) and self.parent.is_reponse_dev()
         
 class reponse_dev(composant):
     
@@ -124,6 +166,15 @@ class reponse_dev(composant):
 
     def is_reponse_dev(self):
         return True
+    
+    def verifier_integrite(self):
+        # Vérifie si le composant est intègre et a bien été initialisé
+        # Au moins un fils (bouton_fermer_reponse), et pas de parent (package différent, voir doc)
+        bfr = False
+        for fils in self.fils:
+            if fils.is_bouton_fermer_reponse():
+                bfr = True
+        return (len(self.fils) >= 1) and bfr
         
 class sondage(composant):
     
@@ -132,6 +183,24 @@ class sondage(composant):
 
     def is_sondage(self):
         return True
+    
+    def donner_parent(self, composant):
+        # Pas de parent pour un sondage
+        AssertionError("Un sondage ne peut contenir de parent.")
+
+    def verifier_integrite(self):
+        # Vérifie si le composant est intègre et a bien été initialisé
+        # Au moins un auteur et une option en tant que fils, mais pas de parent
+        auteur = False
+        option = False
+        for fils in self.fils:
+            if fils.is_auteur_sondage():
+                auteur = True
+            if fils.is_option_reponse():
+                option = True
+        
+        return (len(self.fils) >= 2) and auteur and option
+        
         
 class voir_reponses_option(composant):
         
@@ -141,6 +210,11 @@ class voir_reponses_option(composant):
     def is_voir_reponses_option(self):
         return True
     
+    def verifier_integrite(self):
+        # Vérifie si le composant est intègre et a bien été initialisé
+        # Un parent option_reponse et pas de fils (voir doc, reponse_dev dans un autre package)
+        return (len(self.fils) == 0) and self.parent.is_option_reponse()
+    
 
 class auteur_sondage(composant):
     
@@ -149,6 +223,11 @@ class auteur_sondage(composant):
 
     def is_auteur_sondage(self):
         return True
+    
+    def verifier_integrite(self):
+        # Vérifie si le composant est intègre et a bien été initialisé
+        # Pas de fils, et un parent sondage
+        return (len(self.fils) == 0) and self.parent.is_sondage()
             
 
 
