@@ -1,5 +1,5 @@
 import cv2
-#import pymouse
+import numpy as np
 import dotenv
 from composition_ecran import composition_ecran, composant, auteur_sondage, bouton_fermer_reponse, bouton_voir_tout, option_reponse, personne_sondee, reponse_dev, sondage, voir_reponses_option
 from ultralytics import YOLO
@@ -45,7 +45,7 @@ def read_screen(debug = False):
     # Lit l"écran et renvoie une frame
     # En débug, on utilise juste une frame qui traine
     if debug:
-        return cv2.imread("frames_test/frame1.jpg")
+        return cv2.imread("frames_test/frame2.jpg")
     
 def class_id_to_name(id):
     # convertit l'id de classe en une str compréhensible.
@@ -88,12 +88,37 @@ def analyse_frames(frame):
     for box in zip_boxes:
         compo.ajouter_composant(make_component(box))
 
-def make_component(box):
+    return compo
+
+def exporter_composition_as_frame(composition, taillex, tailley):
+    # Pour du debug, prend tout ce qui est visible sur la composition et renvoie une frame illustrative (taille en param)
+    frame = np.zeros((taillex, tailley, 3), np.uint8)
+    for composant in composition.get_all_composants():
+        x, y, w, h = composant.position
+        x1, y1, w1, h1 = int(x-w/2), int(y-h/2), int(x+w/2), int(y+h/2)
+        cv2.rectangle(frame, (x1, y1), (w1, h1), (255, 255, 255), 2)
+        cv2.putText(frame, composant.__class__.__name__, (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+    
+    return frame
+
+def afficher_frame(frame):
+    # Affiche la frame
+    cv2.imshow("Frame", frame)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+def enregistrer_frame(frame, path):
+    # Enregistre la frame
+    cv2.imwrite(path, frame)
+    print(f"Frame enregistrée à {path}")
+
+def make_component(box_detail):
     # Box: (tensor([1112.8577,  704.6846,  207.5119,   53.7666]), tensor(0.9690), tensor(4.))
     # On convertit les tensors en tuples
-    box = tuple(box[0].tolist())
-    confidence = box[1].item()
-    classe = int(box[2].item())
+    box = tuple(box_detail[0].tolist())
+    confidence = box_detail[1]
+    classe = int(box_detail[2])
+    print(classe)
 
     if classe == 0: # auteur_sondage
         component = auteur_sondage(box)
@@ -131,3 +156,8 @@ if __name__ == "__main__":
 
     # Analyse de la frame
     composition = analyse_frames(frame)
+
+    # Exporter la composition en frame
+    enregistrer_frame(exporter_composition_as_frame(composition, 1440, 2560), "frames_test/composition.jpg")
+    composition.debug_imprimer_arbre_composants()
+

@@ -12,6 +12,34 @@ class composition_ecran:
     def ajouter_composant(self, composant):
         self.composants.append(composant)
 
+    def verifier_integrite(self):
+        # Vérifie l'intégrité de la composition d'écran
+        for composant in self.composants:
+            composant.verifier_integrite()
+
+    def get_all_composants(self):
+        return self.composants
+    
+    def ordonner(self):
+        # Pour tous les composants dans la composition, on regarde ceux qui sont imbriqués les uns dans les autres pour définir des fils et des pères.
+        for composant in self.composants:
+            for autre_composant in self.composants:
+                if composant.est_contenu_dans(autre_composant.position):
+                    composant.donner_parent(autre_composant)
+                    autre_composant.ajouter_fils(composant)
+
+    def debug_imprimer_arbre_composants(self):
+        # Debug exclusivement, imprime l'arborescence des composants
+        # On part de chaque composant qui n'a pas de parent, et on déroule ensuite de fils en fils
+        orphelins = []
+        for cpst in self.get_all_composants():
+            if not cpst.a_un_parent():
+                orphelins.append(cpst)
+        for cpst in orphelins:
+            cpst.debug_print_composant()
+            
+
+
 
 class composant:
     """ Classe générique sur la base de laquelle on construira les composants de la composition d'écran."""
@@ -101,6 +129,18 @@ class composant:
     def set_init_status(self, status):
         # Met à jour le statut d'initialisation du composant
         self.is_init = status
+
+    def a_un_parent(self):
+        return not self.parent is None
+    
+    def debug_print_composant(self, indent = 0):
+        # Imprime le composant et ses fils
+        print(f"{' '*indent}{self.__class__.__name__} (id {self.id})")
+        if len(self.fils) > 0:
+            new_indent = indent + 2
+            for child in self.fils:
+                child.debug_print_composant(new_indent)
+
     
 
 
