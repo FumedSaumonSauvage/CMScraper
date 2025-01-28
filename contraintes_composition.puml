@@ -54,6 +54,12 @@ Class personne_sondee{
     - nom
 }
 
+Class database_helper{
+    + instance: itself
+    + init_db()
+    + ajouter_personne()
+}
+
 
 sondage -up-|> composant
 option_reponse -up-|> composant

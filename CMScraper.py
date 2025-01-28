@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import dotenv
 from composition_ecran import composition_ecran, composant, auteur_sondage, bouton_fermer_reponse, bouton_voir_tout, option_reponse, personne_sondee, reponse_dev, sondage, voir_reponses_option
+from database import database_helper
 from ultralytics import YOLO
 import os
 
@@ -160,4 +161,8 @@ if __name__ == "__main__":
     # Exporter la composition en frame
     enregistrer_frame(exporter_composition_as_frame(composition, 1440, 2560), "frames_test/composition.jpg")
     composition.debug_imprimer_arbre_composants()
+
+    # Chargement de la DB
+    db_helper = database_helper()
+    db_helper.init_db()
 

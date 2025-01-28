@@ -8,6 +8,7 @@ class composition_ecran:
         self.frame = frame
         self.composants = []
         self.score = 0
+        self.id = id_cooker.get_instance().get_new_id()
 
     def ajouter_composant(self, composant):
         self.composants.append(composant)
