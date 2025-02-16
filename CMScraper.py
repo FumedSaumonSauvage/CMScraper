@@ -5,6 +5,7 @@ from composition_ecran import composition_ecran, composant, auteur_sondage, bout
 from database import database_helper_names
 from ultralytics import YOLO
 import os
+import pytesseract
 
 
 """
@@ -150,10 +151,58 @@ def detecter_bboxes(frame):
     results = model(frame)
     return results[0].boxes
 
+def OCR(composant_graph, frame):
+    # On fait de l'OCR sur le composant précisément: selon le type, différentes stratégies
+
+    #Réduction de la zone de la frame au composant
+    if composant_graph.is_sondage():
+        # Masquer l'auteur, et tout ce qui est plus bas que l'auteur
+        x, y, w, h = composant_graph.position
+        x1, y1, x2, y2 = int(x - w / 2), int(y - h / 2), int(x + w / 2), int(y + h / 2)
+        cropped_frame = frame[y1:y2, x1:x2]
+
+        auteur = [element for element in composant_graph.fils if element.is_auteur_sondage() == True]
+
+        if auteur:
+            auteur = auteur[0]
+            x_a, y_a, w_a, h_a = auteur.position
+            x1_a, y1_a, x2_a, y2_a = int(x_a - w_a / 2), int(y_a - h_a / 2), int(x_a + w_a / 2), int(y_a + h_a / 2)
+            cropped_frame[y1_a:y2_a, x1_a:x2_a] = 0  # Masquer l'auteur
+
+        reponses = [element for element in composant_graph.fils if element.is_option_reponse() == True]
+        if reponses:
+            reponse = reponses[0]
+            x_r, y_r, w_r, h_r = reponse.position
+            x1_r, y1_r, x2_r, y2_r = int(x_r - w_r / 2), int(y_r - h_r / 2), int(x_r + w_r / 2), int(y_r + h_r / 2)
+            cropped_frame[y2_r:, :] = 0  # Masquer tout ce qui est en dessous de la première réponse
+
+    elif composant_graph.is_auteur_sondage():
+        x, y, w, h = composant_graph.position
+        x1, y1, x2, y2 = int(x - w / 2), int(y - h / 2), int(x + w / 2), int(y + h / 2)
+        cropped_frame = frame[y1:y2, x1:x2]
+
+        text = pytesseract.image_to_string(cropped_frame)
+        # Lire seulement la première ligne
+        first_line = text.split('\n')[0]
+        return first_line
+    
+    elif composant_graph.is_option_reponse():
+        x, y, w, h = composant_graph.position
+        x1, y1, x2, y2 = int(x - w / 2), int(y - h / 2), int(x + w / 2), int(y + h / 2)
+        cropped_frame = frame[y1:y2, x1:x2]
+
+        text = pytesseract.image_to_string(cropped_frame)
+        return text
+
+
+    
+
 
 if __name__ == "__main__":
 
     dotenv.load_dotenv()
+
+    sondages_global = [] # Ensemble des sondages qui ont été vus
 
     # Lire la frame en question
     frame = read_screen(debug = True)
@@ -165,7 +214,11 @@ if __name__ == "__main__":
     enregistrer_frame(debug_exporter_composition_as_frame(composition, 1440, 2560), "test1.png")
     composition.debug_imprimer_arbre_composants()
 
-    # Chargement de la DB
-    #db_helper = database_helper_names()
-    #db_helper.init_db()
+    for cpst in composition.get_all_composants():
+        print(f"{cpst.__class__.__name__}, id {cpst.id}: {OCR(cpst, frame)}")
+
+
+
+
+
 
