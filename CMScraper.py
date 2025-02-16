@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import dotenv
 from composition_ecran import composition_ecran, composant, auteur_sondage, bouton_fermer_reponse, bouton_voir_tout, option_reponse, personne_sondee, reponse_dev, sondage, voir_reponses_option
-from database import database_helper
+from database import database_helper_names
 from ultralytics import YOLO
 import os
 
@@ -46,7 +46,7 @@ def read_screen(debug = False):
     # Lit l"écran et renvoie une frame
     # En débug, on utilise juste une frame qui traine
     if debug:
-        return cv2.imread("frames_test/frame2.jpg")
+        return cv2.imread("test_frame.png")
     
 def class_id_to_name(id):
     # convertit l'id de classe en une str compréhensible.
@@ -82,24 +82,28 @@ def analyse_frames(frame):
 
     for box, confidence, class_id in zip(filtered_boxes, filtered_conf, filtered_cls):
         x1, y1, x2, y2 = box
-        print(f"Box: ({x1}, {y1}, {x2}, {y2}), Confidence: {confidence:.2f}, Class: {class_id_to_name(int(class_id))}")
+        #print(f"Box: ({x1}, {y1}, {x2}, {y2}), Confidence: {confidence:.2f}, Class: {class_id_to_name(int(class_id))}")
 
     zip_boxes = zip(filtered_boxes, filtered_conf, filtered_cls)
     # Construction d'un objet composition_ecran
     for box in zip_boxes:
         compo.ajouter_composant(make_component(box))
+    
+    compo.ordonner(threshold_incl=0.8, verbose=False) # On range les composants les uns dans les autres
 
     return compo
 
-def exporter_composition_as_frame(composition, taillex, tailley):
+def debug_exporter_composition_as_frame(composition, taillex, tailley):
     # Pour du debug, prend tout ce qui est visible sur la composition et renvoie une frame illustrative (taille en param)
     frame = np.zeros((taillex, tailley, 3), np.uint8)
     for composant in composition.get_all_composants():
         x, y, w, h = composant.position
         x1, y1, w1, h1 = int(x-w/2), int(y-h/2), int(x+w/2), int(y+h/2)
         cv2.rectangle(frame, (x1, y1), (w1, h1), (255, 255, 255), 2)
-        cv2.putText(frame, composant.__class__.__name__, (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-    
+        text_size = cv2.getTextSize(composant.__class__.__name__, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)[0]
+        text_x = x1 + 5
+        text_y = y1 + text_size[1] + 5
+        cv2.putText(frame, f"{composant.__class__.__name__}, id: {composant.id}", (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
     return frame
 
 def afficher_frame(frame):
@@ -119,7 +123,6 @@ def make_component(box_detail):
     box = tuple(box_detail[0].tolist())
     confidence = box_detail[1]
     classe = int(box_detail[2])
-    print(classe)
 
     if classe == 0: # auteur_sondage
         component = auteur_sondage(box)
@@ -159,10 +162,10 @@ if __name__ == "__main__":
     composition = analyse_frames(frame)
 
     # Exporter la composition en frame
-    enregistrer_frame(exporter_composition_as_frame(composition, 1440, 2560), "frames_test/composition.jpg")
+    enregistrer_frame(debug_exporter_composition_as_frame(composition, 1440, 2560), "test1.png")
     composition.debug_imprimer_arbre_composants()
 
     # Chargement de la DB
-    db_helper = database_helper()
-    db_helper.init_db()
+    #db_helper = database_helper_names()
+    #db_helper.init_db()
 

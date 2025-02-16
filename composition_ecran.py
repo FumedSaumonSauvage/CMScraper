@@ -21,23 +21,63 @@ class composition_ecran:
     def get_all_composants(self):
         return self.composants
     
-    def ordonner(self):
+    def ordonner(self, threshold_incl = 0.9, verbose = False):
         # Pour tous les composants dans la composition, on regarde ceux qui sont imbriqués les uns dans les autres pour définir des fils et des pères.
+        sondages = []
+        options = []
+        voir_reponses = []
+        auteurs = []
+
         for composant in self.composants:
-            for autre_composant in self.composants:
-                if composant.est_contenu_dans(autre_composant.position):
-                    composant.donner_parent(autre_composant)
-                    autre_composant.ajouter_fils(composant)
+            if composant.is_sondage():
+                sondages.append(composant)
+                if verbose:
+                    print(f"Sondage {composant.id} ajouté")
+            if composant.is_option_reponse():
+                options.append(composant)
+                if verbose:
+                    print(f"Option {composant.id} ajoutée")
+            if composant.is_voir_reponses_option():
+                voir_reponses.append(composant)
+                if verbose:
+                    print(f"Voir réponses {composant.id} ajouté")
+            if composant.is_auteur_sondage():
+                auteurs.append(composant)
+                if verbose:
+                    print(f"Auteur {composant.id} ajouté")
+
+        for sondage_t in sondages:
+            for option_t in options:
+                if option_t.est_contenu_dans(sondage_t.position) > threshold_incl:
+                    sondage_t.ajouter_fils(option_t)
+                    option_t.donner_parent(sondage_t)
+                    if verbose:
+                        print(f"Option {option_t.id} est un fils de sondage {sondage_t.id}")
+            for auteur_t in auteurs:
+                if auteur_t.est_contenu_dans(sondage_t.position) > threshold_incl:
+                    sondage_t.ajouter_fils(auteur_t)
+                    auteur_t.donner_parent(sondage_t)
+                    if verbose:
+                        print(f"Auteur {auteur_t.id} est un fils de sondage {sondage_t.id}")
+        
+        for option_t in options:
+            for voir_t in voir_reponses:
+                if voir_t.est_contenu_dans(option_t.position) > threshold_incl:
+                    option_t.ajouter_fils(voir_t)
+                    voir_t.donner_parent(option_t)
+                    if verbose:
+                        print(f"Voir réponses {voir_t.id} est un fils de option {option_t.id}")
 
     def debug_imprimer_arbre_composants(self):
         # Debug exclusivement, imprime l'arborescence des composants
         # On part de chaque composant qui n'a pas de parent, et on déroule ensuite de fils en fils
-        orphelins = []
+
         for cpst in self.get_all_composants():
             if not cpst.a_un_parent():
-                orphelins.append(cpst)
-        for cpst in orphelins:
-            cpst.debug_print_composant()
+                print(f"Composant orphelin: {cpst.__class__.__name__} (id {cpst.id})")
+                cpst.debug_print_composant(indent=2)
+
+            
             
 
 
@@ -47,8 +87,6 @@ class composant:
 
     def __init__(self, position):
         """ Arguments:
-        id: int - Component identifier, built by component factory.
-        classe: str - Component class TODO voir si ca sert
         position: (xcenter, ycenter, width, height) - Component position in the frame."""
         self.id = id_cooker.get_instance().get_new_id()
         self.position = position
@@ -88,35 +126,40 @@ class composant:
         # initialise le parent du composant en question
         self.parent = composant
 
-    def est_contenu_dans(self, x, y, w, h):
+    def est_contenu_dans(self, autre_position):
         # Renvoie La proportion du composant qui est contenue si le composant en question est contenu dans la bbox passéen en arguments
-        # En gros c'est une iou
+        # En gros c'est une IOU
 
         x1, y1, w1, h1 = self.position
-        x2, y2, w2, h2 = x,y,w,h
+        x2, y2, w2, h2 = autre_position
+  
+        x1min = x1 - w1 / 2
+        y1min = y1 - h1 / 2
+        x1max = x1 + w1 / 2
+        y1max = y1 + h1 / 2
 
-        # Calcul des coordonnées des bords des boîtes
-        x1_max = x1 + w1
-        y1_max = y1 + h1
-        x2_max = x2 + w2
-        y2_max = y2 + h2
+        x2min = x2 - w2 / 2
+        y2min = y2 - h2 / 2
+        x2max = x2 + w2 / 2
+        y2max = y2 + h2 / 2
 
-        # Vérification de la contenance complète
-        if x1 >= x2 and y1 >= y2 and x1_max <= x2_max and y1_max <= y2_max:
-            return 1.0
+        #Coord intersections
+        xmin = max(x1min, x2min)
+        ymin = max(y1min, y2min)
+        xmax = min(x1max, x2max)
+        ymax = min(y1max, y2max)
 
-        # Calcul de l'intersection
-        x_intersection = max(0, min(x1_max, x2_max) - max(x1, x2))
-        y_intersection = max(0, min(y1_max, y2_max) - max(y1, y2))
+        if xmax <= xmin or ymax <= ymin:
+            return 0 # Pas d'intersection
 
-        aire_intersection = x_intersection * y_intersection
-        aire_boite1 = w1 * h1
+        intersection_area = (xmax - xmin) * (ymax - ymin)
+        rect1_area = w1 * h1
+        rect2_area = w2 * h2
+        union_area = rect1_area + rect2_area - intersection_area
 
-        # Calcul de la proportion
-        if aire_boite1 == 0:
-            return 0.0
+        contenu = intersection_area / (w1*h1)
+        return contenu
 
-        return aire_intersection / aire_boite1
     
     def verifier_integrite(self):
         # Vérifie si le composant est intègre et a bien été initialisé
@@ -141,6 +184,10 @@ class composant:
             new_indent = indent + 2
             for child in self.fils:
                 child.debug_print_composant(new_indent)
+
+    def debug_print_composant_self(self):
+        # Imprime juste le composant
+        print(f"{self.__class__.__name__} (id {self.id})")
 
     
 

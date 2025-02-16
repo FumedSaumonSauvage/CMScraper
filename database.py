@@ -1,10 +1,10 @@
 # Classe utilisée pour stocker les gens qui ont été rencontrés, et éviter les erreurs dues à l'OCR.
 
-import sqlite3
+import json
 import os
 import dotenv
 
-class database_helper:
+class database_helper_names:
     """On implémente le DP Singleton"""
 
     _instance = None
@@ -12,7 +12,7 @@ class database_helper:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(database_helper, cls).__new__(cls)
+            cls._instance = super(database_helper_names, cls).__new__(cls)
         return cls._instance
     
     @classmethod
@@ -22,24 +22,15 @@ class database_helper:
         return cls._instance
 
     def init_db(self):
-        # On initialise la base de données
-        dotenv.load_dotenv()
-        self._db = sqlite3.connect(os.getenv("DATABASE_PATH"))
-        cursor = self._db.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS personnes (id INTEGER PRIMARY KEY, nom TEXT)")
-        self._db.commit()
+       pass
 
     def ajouter_personne(self, nom):
         # On ajoute une personne à la base de données
-        cursor = self._db.cursor()
-        cursor.execute("INSERT INTO personnes (nom) VALUES (?)", (nom,))
-        self._db.commit()
+        pass
 
     def verifier_existence_personne(self, nom):
         # On vérifie si une personne est déjà dans la base de données
-        cursor = self._db.cursor()
-        cursor.execute("SELECT * FROM personnes WHERE nom = ?", (nom,))
-        return cursor.fetchone() is not None
+        pass
     
     def correlation(self, nom1, nom2):
         # Fournit une métrique de corrélation entre deux noms (entre 0 et 1)
@@ -74,13 +65,7 @@ class database_helper:
 
     def correction_nom_personne(self, nom, seuil = 0.8):
         # On essaie de voir si à une lettre près la personne existe, ca éviterait de mettre des personnes qui n'ont aucun sens dans la DB
-        cursor = self._db.cursor()
-        cursor.execute("SELECT * FROM personnes")
-        personnes = cursor.fetchall()
-        for personne in personnes:
-            if self.correlation(nom, personne[1]) > seuil:
-                return personne[1]
-        return ""
+        pass
 
 
 
