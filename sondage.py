@@ -16,11 +16,43 @@ class sondage_m:
     def ajouter_option(self, option):
         self.options.append(option)
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "description": self.description,
+            "auteur": self.auteur,
+            "date_creation": self.date_creation,
+            "ouvert": self.ouvert,
+            "choix_unique": self.choix_unique,
+            "options": [option.to_dict() for option in self.options]
+        }
+    
+    def to_dict_smpl(self):
+        return {
+            "description": self.description,
+            "auteur": self.auteur,
+            "options": [option.to_dict() for option in self.options]
+        }
+
 class option_m:
     def __init__(self):
         self.id = None
         self.description = None
-        self.nb_votes = None
+        self.taux = None
         self.sondage_id = None
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "description": self.description,
+            "taux": self.taux,
+            "sondage_id": self.sondage_id
+        }
+    
+    def to_dict_smpl(self):
+        return {
+            "description": self.description,
+            "taux": self.taux
+        }
     
 

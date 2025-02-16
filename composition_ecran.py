@@ -68,6 +68,14 @@ class composition_ecran:
                     if verbose:
                         print(f"Voir réponses {voir_t.id} est un fils de option {option_t.id}")
 
+    def get_racines_sondage(self):
+        # Renvoie les racines (mais que les sondages)
+        racines = []
+        for composant in self.composants:
+            if composant.is_sondage() and not composant.a_un_parent():
+                racines.append(composant)
+        return racines
+
     def debug_imprimer_arbre_composants(self):
         # Debug exclusivement, imprime l'arborescence des composants
         # On part de chaque composant qui n'a pas de parent, et on déroule ensuite de fils en fils
