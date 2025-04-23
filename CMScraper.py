@@ -25,7 +25,8 @@ Si on voit un sondage au complet (longueur minimale):
             Il y a un bouton pour afficher les réponses
             S'il n'y en a pas, on considère la réponse invalide
 
-    Ajouter le sondage au Json
+    Ajouter le sondage au Json:
+        Si il y a une entrée associée, on la màj
 
     Pour chaque option de réponses:
         Cliquer pour voir les participants (interpoler la zone théorique et la détection)
@@ -237,7 +238,10 @@ if __name__ == "__main__":
     composition = analyse_frames(frame)
 
     # Exporter la composition en frame
-    enregistrer_frame(debug_exporter_composition_as_frame(composition, 1440, 2560), "test1.png")
+    screen_width = int(os.getenv("RESOLUTION_WIDTH"))
+    screen_height = int(os.getenv("RESOLUTION_HEIGHT"))
+    enregistrer_frame(debug_exporter_composition_as_frame(composition, screen_height, screen_width), "test1.png")
+
     #composition.debug_imprimer_arbre_composants()
 
     sondages_graph = composition.get_racines_sondage()
