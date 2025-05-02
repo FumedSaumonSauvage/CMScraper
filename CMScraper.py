@@ -47,6 +47,21 @@ TODO: gérer les exceptions si le sondage est long (plus d'en tête, que des ré
 """
 
 
+def verbose(level):
+    # Factory de décorateurs spécifiques à la verbose.
+    # Niveau de verbose contenu entre 0 (minimal) et 3 (maximal), cf. .env pour régler le niveau de verbose.
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            global current_verbosity_level  # Assurez-vous d'avoir une variable globale pour le niveau
+            if current_verbosity_level >= level:
+                return func(*args, **kwargs)
+            else:
+                print(f"Fonction '{func.__name__}' ignorée verbose faible")
+                return None
+        return wrapper
+    return decorator
+
+
 def read_screen(debug = False):
     # Lit l"écran et renvoie une frame
     # En débug, on utilise juste une frame qui traine
@@ -117,10 +132,23 @@ def afficher_frame(frame):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
+@verbose(level=2)
 def enregistrer_frame(frame, path):
     # Enregistre la frame
     cv2.imwrite(path, frame)
     print(f"Frame enregistrée à {path}")
+
+@verbose(level=3)
+def enregistrer_frame_dans_video(frame, path):
+    # Met al frame à la suite de la vidéo indiquée. Si la vidéo n'existe pas (frame 0), on la crée
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    fps = 30.0
+    width = frame.shape[1]
+    height = frame.shape[0]
+    video = cv2.VideoWriter(path, fourcc, fps, (width, height))
+    video.write(frame)
+    video.release()
+    print(f"Video màj à {path}")
 
 def make_component(box_detail):
     # Box: (tensor([1112.8577,  704.6846,  207.5119,   53.7666]), tensor(0.9690), tensor(4.))
@@ -220,6 +248,143 @@ def OCR(composant_graph, frame, confiance = 40):
         text = " ".join(data['text'][i] for i in range(len(data['text'])) if int(data['top'][i]) >= niveau_bas* 0.6)
 
         return text
+    
+def verifier_vision_sondage(composant_graph, padding_minimal = 50):
+    # Vérifie si le sondage est visible au complet
+    # On vérifie que le composant est un sondage, et quu'il y a du padding au dessous du sondage (ou alors un nouveau sondage)
+    if composant_graph.is_sondage():
+        # On vérifie que le composant est un sondage
+        # On vérifie qu'il y a du padding au dessous du sondage (ou alors un nouveau sondage)
+        x, y, w, h = composant_graph.position
+        x1, y1, x2, y2 = int(x - w / 2), int(y - h / 2), int(x + w / 2), int(y + h / 2)
+        
+        # Vérifier si le sondage est visible au complet
+        if y2 < frame.shape[0] - padding_minimal:  # Si le bas du sondage est à moins de 50 pixels du bas de l'écran
+            return True
+        else:
+            # Vérifier s'il y a un autre sondage en dessous
+            for composant in composant_graph.fils:
+                if composant.is_sondage():
+                    x2_s, y2_s, w2_s, h2_s = composant.position
+                    x1_s, y1_s, x2_s, y2_s = int(x2_s - w2_s / 2), int(y2_s - h2_s / 2), int(x2_s + w2_s / 2), int(y2_s + h2_s / 2)
+                    if y1 < y1_s:
+                        return False
+            return True
+    return False
+
+def scroll_down(scroll_type):
+    # Scroller un peu vers le bas
+    try:
+        if scroll_type == "small":
+            # Scroll small amount
+            pass
+        elif scroll_type == "big":
+            # Scroll big amount
+            pass
+        else:
+            raise Exception("Type de scroll inconnu")
+    except Exception as e:
+        print(f"Erreur lors du scroll: {e}")
+        pass
+
+    
+def main_loop(screen_width, screen_height):
+    """
+    Définit une boucle principale pour lire l'écran et analyser les sondages.
+    Fonctionnement:
+    
+    Lire l'écran
+    Si on voit un sondage au complet (longueur minimale):
+
+        cliquer sur "voir tout" 
+
+        Lire l'auteur, son texte total et ses options de réponse
+        Vérifier que le sondage est cohérent:
+            Il existe un auteur
+            Il existe des options de réponse
+            Pour chaque option de réponse:
+                Il y a un bouton pour afficher les réponses
+                S'il n'y en a pas, on considère la réponse invalide
+
+        Ajouter le sondage au Json:
+            Si il y a une entrée associée, on la màj
+
+        Pour chaque option de réponses:
+            Cliquer pour voir les participants (interpoler la zone théorique et la détection)
+            Tant que il y a des changements à l'écran:
+                Détecter les réponses
+                Mettre la souris au milieu de la boite à réponse
+                Scroller
+            
+            Fermer la boite
+        
+        Scroller plus bas pour ne plus voir le sondage
+
+    Si on ne le voit pas au complet:
+        Scroller vers le bas
+
+    TODO: gérer les exceptions si le sondage est long (plus d'en tête, que des réponses)
+    """
+
+    while True:
+        # Analyse de l'écran
+        frame = read_screen(debug = True)
+        composition = analyse_frames(frame)
+
+        # Le sondage est il complet?
+        sondages_graph = composition.get_racines_sondage()
+        for sg in sondages_graph:
+            if verifier_vision_sondage(sg):
+                sondage_complet = sg.id
+                print(f"Sondage complet trouvé: {sg.id}")
+                break
+        else:
+            print("Aucun sondage complet trouvé")
+            continue
+
+        if sondage_complet:
+            # On clique sur le bouton "voir tout"
+            bouton_voir_tout = [fils for fils in sg.fils if fils.is_bouton_voir_tout()]
+            if bouton_voir_tout:
+                bouton_voir_tout[0].click()
+                print("Bouton 'voir tout' cliqué")
+            else:
+                print("Aucun bouton 'voir tout' trouvé")
+                continue
+
+            # On lit l'auteur, son texte total et ses options de réponse
+            sm = sondage_m()
+            sm.description = OCR(sg, frame)
+            auteur = [fils for fils in sg.fils if fils.is_auteur_sondage()]
+            if auteur:
+                sm.auteur = OCR(auteur[0], frame)
+            else:
+                sm.auteur = "Auteur inconnu"
+            
+            options = [fils for fils in sg.fils if fils.is_option_reponse()]
+            for option in options:
+                # Tout pourri, TODO refaire cette fonction
+                om = option_m()
+                om.description = OCR(option, frame)
+                taux_match = re.search(r'(\d+)%', om.description)
+                om.taux = int(taux_match.group(1)) if taux_match else 0
+                om.description = re.sub(r'\d+%', '', om.description).strip()
+                sm.ajouter_option(om)
+            
+            sondages_global.append(sm)
+            # Exporter les sondages en JSON
+            data = {
+                "sondages": [sondage.to_dict_smpl() for sondage in sondages_global]
+            }
+            write_to_json_file(data, "sondages.json")
+        
+        else:
+            scroll_down("small")
+                
+
+
+
+
 
 
     
@@ -240,6 +405,9 @@ if __name__ == "__main__":
     # Exporter la composition en frame
     screen_width = int(os.getenv("RESOLUTION_WIDTH"))
     screen_height = int(os.getenv("RESOLUTION_HEIGHT"))
+    #niveau_verbose = int(os.getenv("VERBOSE"))
+    niveau_verbose = 2 # TODO: remettre une implémentation clean
+
     enregistrer_frame(debug_exporter_composition_as_frame(composition, screen_height, screen_width), "test1.png")
 
     #composition.debug_imprimer_arbre_composants()
