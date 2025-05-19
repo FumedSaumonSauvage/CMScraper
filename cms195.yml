@@ -1,0 +1,14 @@
+path: cms180
+
+train: train
+val: val
+
+names:
+    0: auteur_sondage
+    1: bouton_fermer_reponse
+    2: bouton_voir_tout
+    3: option_reponse
+    4: personne_sondee
+    5: reponse_dev
+    6: sondage
+    7: voir_reponses_option
