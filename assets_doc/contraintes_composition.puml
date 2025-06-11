@@ -1,0 +1,81 @@
+@startuml contraintes_composition
+title Screen to semantics
+
+Class composition_ecran {
+    + frame
+    - composant[]
+    - score
+}
+
+Class composant{
+    + id
+    + posx : center
+    + posy : center
+    + width
+    + height
+    - read_finished: bool
+}
+
+Class id_cooker{
+    + instance: itself
+    + get_new_id()
+}
+
+Class sondage{
+    - question
+    - auteur
+    - options_reponses
+}
+
+Class option_reponse{
+    - reponse
+    - percentile
+    - respondants[]
+}
+
+Class auteur_sondage{
+    - nom
+}
+
+Class bouton_voir_tout
+
+Class voir_reponses_option{
+    - option
+}
+
+Class reponse_dev{
+    - reponse_option
+    - personne_sondee[]: respondants
+}
+
+Class bouton_fermer_reponse
+
+Class personne_sondee{
+    - nom
+}
+
+Class database_helper{
+    + instance: itself
+    + init_db()
+    + ajouter_personne()
+}
+
+
+sondage -up-|> composant
+option_reponse -up-|> composant
+auteur_sondage -up-|> composant
+bouton_voir_tout -up-|> composant
+voir_reponses_option -up-|> composant
+reponse_dev -up-|> composant
+bouton_fermer_reponse -up-|> composant
+personne_sondee -up-|> composant
+
+option_reponse "1" -- "1" voir_reponses_option
+option_reponse "1" -- "1" reponse_dev
+sondage "1" -- "1" auteur_sondage
+composition_ecran "1" -- "*" composant
+bouton_fermer_reponse "1" -- "1" reponse_dev
+reponse_dev "1" -- "*" personne_sondee
+bouton_voir_tout "1" -- "0..1" sondage
+
+@enduml
