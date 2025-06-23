@@ -1,6 +1,6 @@
-# Scripts utiles
+# Training
 
-Dossier contenant des scripts, à l'utilité variable.
+Dossier contenant des scripts pour l'entrainement et la préparation des données, à l'utilité variable.
 
 ## Frame separator
 
@@ -33,4 +33,11 @@ scripts_utiles/
 
 ## Dataset maker
 
-Dans les versions récentes de Label Studio, les images ne sont plus téléchargeables à l'export. Ce script fabrique un dataset YOLO à partir d'une banque dimage, et d'un paquets de labels YOLO.
+**Make dataset from labels:** Dans les versions récentes de Label Studio, les images ne sont plus téléchargeables à l'export. Ce script fabrique un dataset YOLO à partir d'une banque dimage, et d'un paquets de labels YOLO.
+
+Utilisation: `python make_dataset_from_labels.py --dataset_path path/to/half/baked/dataset --source_images_path path/to/LS/storage`
+
+
+**Prepare dataset:** Divise le dataset en train et val, aléatoirement.
+
+Utilisation: `python preparation_dataset.py --data_dir path/to/full/dataset --val_ratio 0.1`

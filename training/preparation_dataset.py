@@ -2,7 +2,6 @@ import os
 import shutil
 import random
 import argparse
-from ultralytics import YOLO
 
 def prepare_yolo_dataset(data_dir, val_ratio=0.1):
     """
@@ -70,19 +69,10 @@ def prepare_yolo_dataset(data_dir, val_ratio=0.1):
     print("Fichiers de validation déplacés.")
     print("Préparation du dataset terminée.")
 
-def train_yolo_model(yaml_path):
-    model = YOLO("yolo11m.pt")
-    model.train(data=yaml_path, epochs=100, imgsz=1080, batch=2, device="cpu", workers=4)
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prépare un dataset YOLO pour l'entraînement.")
-    parser.add_argument("--data_dir", type=str, default="data.yaml", help="Le chemin vers le dossier principal du dataset (ex: cms180).")
+    parser.add_argument("--data_dir", type=str, default="dataset", help="Le chemin vers le dossier principal du dataset (ex: cms180).")
     parser.add_argument("--val_ratio", type=float, default=0.1, help="Le ratio de données à utiliser pour l'ensemble de validation (entre 0 et 1).")
-    parser.add_argument("mode", type=str, choices = ["prepare", "train"], default="prepare", help="Mode d'exécution")
-    parser.add_argument("--yaml", type=str, default="data.yaml", help="Fichier de configuration YAML pour le modèle YOLO.")
     args = parser.parse_args()
 
-    if args.mode == "train":
-        train_yolo_model(args.yaml)
-    elif args.mode == "prepare":
-        prepare_yolo_dataset(args.data_dir, args.val_ratio)
+    prepare_yolo_dataset(args.data_dir, args.val_ratio)
