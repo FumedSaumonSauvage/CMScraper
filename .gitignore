@@ -1,8 +1,5 @@
 ### VS Code ###
 .vscode/
-
-### Mac OS ###
 .DS_Store
-
-
-.mov
+*.mov
+.venv/

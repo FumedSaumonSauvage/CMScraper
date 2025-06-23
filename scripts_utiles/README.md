@@ -30,3 +30,7 @@ scripts_utiles/
 ├── prelabeller.py
 └── README.md
 ```
+
+## Dataset maker
+
+Dans les versions récentes de Label Studio, les images ne sont plus téléchargeables à l'export. Ce script fabrique un dataset YOLO à partir d'une banque dimage, et d'un paquets de labels YOLO.
