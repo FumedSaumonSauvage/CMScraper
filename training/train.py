@@ -4,7 +4,7 @@ import random
 import argparse
 from ultralytics import YOLO
 
-def train_yolo_model(yaml_path, epochs=50, model_path="yolo11m.pt"):
+def train_yolo_model(yaml_path, epochs, model_path):
     model = YOLO(model_path)
     model.train(data=yaml_path, epochs=epochs, imgsz=1080, batch=2, device="cpu", workers=4)
 
