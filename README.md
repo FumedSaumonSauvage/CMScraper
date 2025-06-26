@@ -24,6 +24,8 @@ Then, create a `.env` from the template containing the following:
 - `MODEL`: path to the detection model
 - `INDICE_CONF`: confidence index to believe that a detection is actually true. Recommended around 0.7
 
+Download the suitable model for your hardware [from here](https://cloud.simonhergott.fr/s/sAR7WHyqFcFfkof). There are 2 models, based on YOLOv11 Nano and Medium.
+
 ## Design
 CMScraper relies on YOLO for semantic segmentation of the interface it sees, and simple Python to handle the logic. The polls are stored in a JSON file, and specific names of people are put in a database to prevent multiplying persons in case of an OCR bug.
 YOLOv8 has been trained on ~100 manually annotated frames: the training datasets are not shared for obvious privacy reasons, but the weights are given. After reading the frames and detecting the interessant parts, some tests are performed to verify the integrity of the detected poll to prevent a degradation of resulting data integrity.

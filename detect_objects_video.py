@@ -1,3 +1,5 @@
+# Infère sur une vidéo afin de tester les capacités du modèle.
+
 import sys
 
 import cv2
