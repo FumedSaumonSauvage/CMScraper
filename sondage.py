@@ -6,7 +6,7 @@ from composition_ecran import id_cooker
 class sondage_m:
     def __init__(self):
         self.id = id_cooker.get_instance().get_new_id()
-        self.description = None
+        self.description = [] # Plusieurs possibilités de descriptions pour trouver la plus probable avec pytesseract
         self.auteur = None
         self.date_creation = None
         self.ouvert= None
@@ -15,6 +15,18 @@ class sondage_m:
 
     def ajouter_option(self, option):
         self.options.append(option)
+
+    def ajouter_description(self, description):
+        self.description.append(description)
+
+    def find_most_plausible_description(self):
+        if not self.description:
+            return None
+        elif len(self.description) == 1:
+            return self.description[0]
+        else:
+            print("Pas encore implémenté de correction OCR")
+            return self.description[0]
 
     def to_dict(self):
         return {

@@ -206,6 +206,8 @@ def OCR(composant_graph, frame, confiance = 40):
 
         cropped_frame = c_frame[y1:y2, x1:x2]
 
+        enregistrer_frame(cropped_frame, "debug/cropped_sondage.png") # debug
+
         data = pytesseract.image_to_data(cropped_frame, output_type=pytesseract.Output.DICT)
         text = " ".join(data['text'][i] for i in range(len(data['text'])) if int(data['conf'][i]) > confiance)
         text = text.replace("\n", " ")
@@ -334,7 +336,7 @@ def main_loop(screen_width, screen_height):
     frame_index = 0
     sondages_global = []  # Ensemble des sondages qui ont été vus
 
-    while True and frame_index < 50:  # Limite de frames pour éviter une boucle infinie
+    while True and frame_index < 10:  # Limite de frames pour éviter une boucle infinie
         # Analyse de l'écran
         frame = read_screen()
         frame_index += 1
