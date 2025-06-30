@@ -10,7 +10,6 @@ from sondage import sondage_m, option_m
 import json
 import re
 from Levenshtein import distance as levenshtein_distance
-import pyautogui
 import time
 import sys
 
@@ -302,31 +301,64 @@ def verifier_vision_sondage(composant_graph, frame, padding_minimal = 50):
     return False
 
 def scroll_down(scroll_type, goto_x=None, goto_y=None):
-    # Scrolle vers le bas, en fonction du type de scroll
-    # goto_x et goto_y sont optionnels, si fournis, on déplace la souris avant de scroller
+    """
+    Scrolle vers le bas, en fonction du type de scroll.
+    goto_x et goto_y sont optionnels, si fournis, on déplace la souris avant de scroller.
+    """
     if goto_x is not None and goto_y is not None:
         move_mouse_to(goto_x, goto_y)
 
     try:
-        if scroll_type == "small":
-            pyautogui.scroll(3)
-        elif scroll_type == "big":
-            pyautogui.scroll(6)
-        else:
-            raise Exception("Type de scroll inconnu")
+        if IS_MACOS or IS_XORG:
+            if scroll_type == "small":
+                pyautogui.scroll(3)
+            elif scroll_type == "big":
+                pyautogui.scroll(6)
+            else:
+                raise ValueError("TScroll inconnu")
+        elif IS_WAYLAND:
+            if scroll_type == "small":
+                _wayland_mouse_controller.scroll(-100) # Valeurs douteuses
+            elif scroll_type == "big":
+                _wayland_mouse_controller.scroll(-300)
+            else:
+                raise ValueError("Scroll inconnu")
     except Exception as e:
-        print(f"Erreur lors du scroll: {e}")
-        pass
+        print(f"Erreur inattendue lors du scroll: {e}")
+
 
 def simulate_click(x_screen, y_screen, button='left', clicks=1, interval=0.1):
-    print(f"Cliquage à ({x_screen}, {y_screen})")
-    pyautogui.moveTo(x_screen, y_screen, duration=0.5)
-    pyautogui.click(x=x_screen, y=y_screen, button=button, clicks=1, interval=0.1)
+    """
+    Simule un clic de souris à la position donnée.
+    """
+    print(f"Cliquage à ({x_screen}, {y_screen}) avec le bouton {button}, {clicks} fois.")
+    if IS_MACOS or IS_XORG:
+        pyautogui.click(x=x_screen, y=y_screen, button=button, clicks=clicks, interval=interval)
+    elif IS_WAYLAND:
+        move_mouse_to(x_screen, y_screen)
+        for _ in range(clicks):
+            if button == 'left':
+                _wayland_mouse_controller.click("left")
+            elif button == 'right':
+                _wayland_mouse_controller.click("right")
+            elif button == 'middle':
+                _wayland_mouse_controller.click("middle")
+            else:
+                print(f"Bouton de souris '{button}' inconnu")
+                break
+            if clicks > 1:
+                time.sleep(interval)
 
-def move_mouse_to(x_screen, y_screen):
-    # Déplace la souris à la position (x_screen, y_screen)
-    pyautogui.moveTo(x_screen, y_screen, duration=0.5)
+def move_mouse_to(x_screen, y_screen, duration=0.5):
+    """
+    Déplace la souris à la position (x_screen, y_screen).
+    Pas de duration pour wayland
+    """
     print(f"Déplacement de la souris à ({x_screen}, {y_screen})")
+    if IS_MACOS or IS_XORG:
+        pyautogui.moveTo(x_screen, y_screen, duration=duration)
+    elif IS_WAYLAND:
+        _wayland_mouse_controller.move(x_screen, y_screen)
 
 
 
@@ -459,6 +491,49 @@ def main_loop(screen_width, screen_height):
 if __name__ == "__main__":
 
     dotenv.load_dotenv()
+
+
+    # Compatibilité Wayland + Xorg
+    IS_MACOS = sys.platform == 'darwin'
+    IS_LINUX = sys.platform == 'linux'
+    IS_XORG = False
+    IS_WAYLAND = False
+
+    if IS_LINUX:
+        xdg_session_type = os.environ.get('XDG_SESSION_TYPE')
+        if xdg_session_type == 'wayland':
+            IS_WAYLAND = True
+            print("Environnement: Wayland")
+        elif xdg_session_type == 'x11':
+            IS_XORG = True
+            print("Environnement: Xorg")
+        else:
+            print("Environnement Linux inconnu, voir XDG_SESSION_TYPE")
+            print("Default à Xorg")
+            IS_XORG = True # Tente PyAutoGUI par défaut sur Linux si non spécifié
+    elif IS_MACOS:
+        print("Environnement: macOS")
+    else:
+        print(f"Système inconnu {sys.platform}")
+        sys.exit(1)
+
+    if IS_MACOS or IS_XORG:
+        try:
+            import pyautogui
+        except ImportError:
+            print("Erreur import pyatogui")
+            sys.exit(1)
+    elif IS_WAYLAND:
+        try:
+            from wayland_automation.mouse_controller import Mouse
+            _wayland_mouse_controller = Mouse()
+        except ImportError:
+            print("Erreur import wayland-automation")
+            sys.exit(1)
+        except Exception as e:
+            print(f"Erreur init wayland-automation : {e}")
+            sys.exit(1)
+
 
     current_verbosity_level = 2
 
