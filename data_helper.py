@@ -2,6 +2,23 @@
 # Étendu en classe d'outils pour traiter les données
 
 import json
+from Levenshtein import distance as levenshtein_distance
+
+def correlation_txt(texteA, texteB, seuil = 0.15):
+        # Utilisation de la distance de Levenshtein pour déterminer si texteA = TexteB
+        # Si distance < seuil * max(len(texteA), len(texteB)), on considère que les textes sont égaux
+        if texteA is None or texteB is None:
+            return False
+        
+        distance = levenshtein_distance(texteA, texteB)
+        max_length = max(len(texteA), len(texteB))
+        
+        if max_length == 0:  # Eviter la division par zéro
+            return True
+        
+        #print(f"correlation_txt(): correlation de {texteA} avec {texteB}: Same = {distance} < {seuil * max_length}")
+        
+        return distance < seuil * max_length
 
 class data_helper:
 
@@ -30,16 +47,5 @@ class data_helper:
     
     def close_file(self):
         self._file.close()
-
-    def find_most_plausible_string(self, strings):
-        # Trouve la chaîne de caractères la plus plausible parmi une liste de chaînes. Utilisé pour la correction de l'OCR.
-        if not strings:
-            return None
-        elif len(strings) == 1:
-            return strings[0]
-        else:
-            # Implémenter une médiane de condorcet pour une correction "par mot" en situant les mots dans une phrase.
-            print("Pas encore implémenté de correction OCR")
-            return strings[0]
         
     

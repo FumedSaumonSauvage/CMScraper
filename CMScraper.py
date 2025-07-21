@@ -13,6 +13,7 @@ from Levenshtein import distance as levenshtein_distance
 import pyautogui
 import time
 import sys
+import data_helper
 
 
 def verbose(level):
@@ -179,7 +180,7 @@ def write_to_json_file(data, filename):
     except Exception as e:
         print(f"Erreur ecriture Json: {e}")
 
-def OCR(composant_graph, frame, confiance = 40):
+def OCR(composant_graph, frame, confiance = 10):
     # On fait de l'OCR sur le composant précisément: selon le type, différentes stratégies
 
     c_frame = frame.copy() #évite les embrouilles par la suite
@@ -195,20 +196,24 @@ def OCR(composant_graph, frame, confiance = 40):
         if auteur:
             auteur = auteur[0]
             x_a, y_a, w_a, h_a = auteur.position
-            x1_a, y1_a, x2_a, y2_a = int(x_a - w_a / 2), int(y_a - h_a / 2), int(x_a + w_a / 2), int(y_a + h_a / 2)
+            x1_a, y1_a, x2_a, y2_a = int(x_a - w_a / 2), int(y_a - h_a / 2), int(x_a + w_a / 2)+200, int(y_a + h_a / 2) # TODO: trouver + propre que le +200 pour masquer la date et l'heure
             c_frame[y1_a:y2_a, x1_a:x2_a] = 0  # Masquer l'auteur
 
         reponses = [element for element in composant_graph.fils if element.is_option_reponse() == True]
         for reponse in reponses: # TODO: potentiellement redondant, amélioratioj possible en n'itérant que pour la réponse située le + haut
             x_r, y_r, w_r, h_r = reponse.position
-            x1_r, y1_r, x2_r, y2_r = int(x_r - w_r / 2), int(y_r - h_r / 2), int(x_r + w_r / 2), int(y_r + h_r / 2)
+            x1_r, y1_r, x2_r, y2_r = int(x_r - w_r / 2), int(y_r - h_r / 2), int(x_r + w_r / 2), int(x_r + h_r / 2)
             c_frame[y1_r:, :] = 0  # Masquer tout ce qui est à partir du début de la première réponse (et au dessous)
 
         cropped_frame = c_frame[y1:y2, x1:x2]
 
-        enregistrer_frame(cropped_frame, "debug/cropped_sondage.png") # debug
+        # Quantization + upscaling
+        scale_factor = 2
+        upscaled_frame = cv2.resize(cropped_frame, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
 
-        data = pytesseract.image_to_data(cropped_frame, output_type=pytesseract.Output.DICT)
+        #enregistrer_frame(upscaled_frame, "debug/cropped_sondage.png") 
+
+        data = pytesseract.image_to_data(upscaled_frame, output_type=pytesseract.Output.DICT)
         text = " ".join(data['text'][i] for i in range(len(data['text'])) if int(data['conf'][i]) > confiance)
         text = text.replace("\n", " ")
         return text
@@ -218,7 +223,11 @@ def OCR(composant_graph, frame, confiance = 40):
         x1, y1, x2, y2 = int(x - w / 2), int(y - h / 2), int(x + w / 2), int(y + h / 2)
         cropped_frame = frame[y1:y2, x1:x2]
 
-        text = pytesseract.image_to_string(cropped_frame)
+        # Quantization + upscaling
+        scale_factor = 2 
+        upscaled_frame = cv2.resize(cropped_frame, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
+
+        text = pytesseract.image_to_string(upscaled_frame)
         # Lire seulement la première ligne
         first_line = text.split('\n')[0]
         return first_line
@@ -228,39 +237,72 @@ def OCR(composant_graph, frame, confiance = 40):
         x1, y1, x2, y2 = int(x - w / 2), int(y - h / 2), int(x + w / 2), int(y + h / 2)
         
         # On vire un peu de bordure en plu pour éviter des problèmes d'OCR
-        x1 += int(0.05 * w) # TODO: paramétrer et tej ces constantes
+        x1_crop_margin = int(0.06 * w)
+        # On masque des parties pour éviter d'avoir le % en réponse.
+        cropped_frame_to_process = frame[y1:y2, x1 + x1_crop_margin:x2].copy()
+
+        voir_reponses = [element for element in composant_graph.fils if element.is_voir_reponses_option() == True]
+        if voir_reponses:
+            voir_reponse = voir_reponses[0]
+            x_vr, y_vr, w_vr, h_vr = voir_reponse.position
         
-        cropped_frame = frame[y1:y2, x1:x2]
-        
-        data = pytesseract.image_to_data(cropped_frame, output_type=pytesseract.Output.DICT)
+            x1_vr_rel = int(x_vr - w_vr / 2) - (x1 + x1_crop_margin)
+            y1_vr_rel = int(y_vr - h_vr / 2) - y1
+            x2_vr_rel = int(x_vr + w_vr / 2) - (x1 + x1_crop_margin)
+            y2_vr_rel = int(y_vr + h_vr / 2) - y1
+
+            x1_vr_rel = max(0, x1_vr_rel)
+            y1_vr_rel = max(0, y1_vr_rel)
+            x2_vr_rel = min(cropped_frame_to_process.shape[1], x2_vr_rel)
+            y2_vr_rel = min(cropped_frame_to_process.shape[0], y2_vr_rel)
+            
+            if x1_vr_rel < x2_vr_rel and y1_vr_rel < y2_vr_rel:
+                cropped_frame_to_process[y1_vr_rel:y2_vr_rel, x1_vr_rel:x2_vr_rel] = 255 # masquage blanc
+
+        scale_factor = 2 
+        upscaled_frame_for_ocr = cv2.resize(cropped_frame_to_process, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
+
+        data = pytesseract.image_to_data(upscaled_frame_for_ocr, output_type=pytesseract.Output.DICT)
         text = " ".join(data['text'][i] for i in range(len(data['text'])) if int(data['conf'][i]) > confiance)
 
         return text
     
-def correlation_txt(texteA, texteB, seuil = 0.1):
-    # Utilisation de la distance de Levenshtein pour déterminer si texteA = TexteB
-    # Si distance < seuil * max(len(texteA), len(texteB)), on considère que les textes sont égaux
-    if texteA is None or texteB is None:
-        return False
-    
-    distance = levenshtein_distance(texteA, texteB)
-    max_length = max(len(texteA), len(texteB))
-    
-    if max_length == 0:  # Eviter la division par zéro
-        return True
-    
-    return distance < seuil * max_length
+    elif composant_graph.is_voir_reponses_option():
+        x, y, w, h = composant_graph.position
+        padding_x = int(w * 0.5)
+        padding_y = int(h * 0.5) # 50% en + de chaque coté
 
-def correlation_sondage(sondageA, sondageB, seuil = 0.1):
+        x1_padded = max(0, int(x - w / 2) - padding_x)
+        y1_padded = max(0, int(y - h / 2) - padding_y)
+        x2_padded = min(frame.shape[1], int(x + w / 2) + padding_x)
+        y2_padded = min(frame.shape[0], int(y + h / 2) + padding_y)
+        
+        cropped_frame = frame[y1_padded:y2_padded, x1_padded:x2_padded]
+      
+        scale_factor = 2
+        upscaled_frame = cv2.resize(cropped_frame, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC) 
+
+        #enregistrer_frame(upscaled_frame, "debug/taux.png")
+
+        raw_text = pytesseract.image_to_string(upscaled_frame, config='--psm 7')
+        match = re.search(r'(\d{1,2})%', raw_text) # Regex qui matche le taux
+        if match:
+            taux = int(match.group(1))
+            return taux
+        else:
+            return None
+    
+
+def correlation_sondage(sondageA, sondageB, seuil = 0.3):
     # Utilisation de la distance de Levenshtein pour déterminer si sondageA = sondageB
     # On compare les descriptions, auteurs et options de réponse
     if sondageA is None or sondageB is None:
         return False
-    
-    if not correlation_txt(sondageA.description, sondageB.description, seuil):
+
+    if not data_helper.correlation_txt(sondageA.get_description(), sondageB.get_description(), seuil*2):
         return False
     
-    if not correlation_txt(sondageA.auteur, sondageB.auteur, seuil):
+    if not data_helper.correlation_txt(sondageA.get_auteur(), sondageB.get_auteur(), seuil):
         return False
     
     return True # On considère que deux sondages sont identiques s'ils portent le même auteur et la même description
@@ -336,7 +378,7 @@ def main_loop(screen_width, screen_height):
     frame_index = 0
     sondages_global = []  # Ensemble des sondages qui ont été vus
 
-    while True and frame_index < 10:  # Limite de frames pour éviter une boucle infinie
+    while True and frame_index < 200:  # Limite de frames pour éviter une boucle infinie
         # Analyse de l'écran
         frame = read_screen()
         frame_index += 1
@@ -371,26 +413,21 @@ def main_loop(screen_width, screen_height):
 
         if sondage_complet is not None:
             # On clique sur le bouton "voir tout"
-            bouton_voir_tout = [fils for fils in sg.fils if fils.is_bouton_voir_tout()]
-
-            # DEBUG -- Pour le moment, pas de clic du bouton implémenté
-            #if bouton_voir_tout:
-                #bouton_voir_tout[0].click()
-                #print("Bouton 'voir tout' cliqué")
-            #else:
-                #print("Aucun bouton 'voir tout' trouvé")
-                #continue
+            bouton_voir_tout = [fils for fils in sg.fils if fils.is_bouton_voir_tout()] # TODO: implémenter l'ouverture complète du sondage
 
             # On lit l'auteur, son texte total et ses options de réponse
             sm = sondage_m()
-            sm.description = OCR(sg, frame)
-            if sm.description is None or sm.description == "":
+            descr = OCR(sg, frame)
+            if descr is None or descr == "":
                 print("Sondage sans description, ignoré")
                 scroll_down("small")
                 break
+            else:
+                sm.ajouter_description(descr)
+
             auteur = [fils for fils in sg.fils if fils.is_auteur_sondage()]
             if auteur:
-                sm.auteur = OCR(auteur[0], frame)
+                sm.ajouter_auteur(OCR(auteur[0], frame))
             else:
                 break # Pas d'auteur, on passe au sondage suivant
             
@@ -398,42 +435,39 @@ def main_loop(screen_width, screen_height):
             for option in options:
                 # Tout pourri quand le texte a 2 lignes, TODO refaire cette fonction
                 om = option_m()
-                om.description = OCR(option, frame)
-                taux_match = re.search(r'(\d+)%', om.description)
-                om.taux = int(taux_match.group(1)) if taux_match else 0
-                om.description = re.sub(r'\d+%', '', om.description).strip()
-                if om.description.endswith(">"):
-                    om.description = om.description[:-1].strip()
+                descr_option = OCR(option, frame)
+                om.ajouter_description(descr_option)
+                # Recherche du taux
+                if option.fils is not None:
+                    voir_rep_op = [vro for vro in option.fils if vro.is_voir_reponses_option()]
+                    if len(voir_rep_op) == 1:
+                        om.taux = OCR(voir_rep_op[0], frame)
+                        print(f"Taux: {om.taux}")
                 sm.ajouter_option(om)
 
+            # On vérifie si le sondage existe déjà dans la base de données (on ne vérif que les 10 derniers)
             sondage_m_prec = None
-            # On vérifie si le sondage existe déjà dans la base de données.TODO: optimiser par la suite, complexité délirante
-            for sondage in sondages_global:
+            for sondage in sondages_global[-10:]:
                 if correlation_sondage(sondage, sm):
                     sondage_m_prec = sondage
+                    print("Sondage precedent trouvé")
                     break
 
-            if sondage_m_prec is not None:
+            if sondage_m_prec is not None: # Si on a trouvé un sondage précédent
                 # On met à jour le sondage existant
                 print(f"Sondage déjà existant: {sondage_m_prec.id}, mise à jour")
-                if len(sm.description) > len(sondage_m_prec.description): # TODO: raffiner la stratégie de màj
-                    sondage_m_prec.description = sm.description
+                for desc in sm.description.get_all_versions(): # Ajout de la ou les descriptions vues
+                    sondage_m_prec.ajouter_description(desc)
+
                 if len(sm.options) > len(sondage_m_prec.options):
                     for option in sm.options:
-                        # On vérifie si l'option existe déjà
-                        option_existe = False
-                        for option_prec in sondage_m_prec.options:
-                            if correlation_txt(option.description, option_prec.description):
-                                option_existe = True
-                                break
-                        if not option_existe:
-                            sondage_m_prec.ajouter_option(option)
+                        sondage_m_prec.ajouter_option(option) # sondage_m gère l'ajout des options et la comparaison avec celles qu'il a deja
 
             else: # Le sondage n'existe pas, ajout à la liste globale
-                print(f"Nouveau sondage trouvé: {sm.description}, auteur: {sm.auteur}")
+                print(f"Nouveau sondage trouvé: {sm.get_description()}, auteur: {sm.get_auteur()}")
                 sondages_global.append(sm)
 
-            scroll_down("big")
+            scroll_down("small")
 
             
     
