@@ -27,6 +27,7 @@ class composition_ecran:
         options = []
         voir_reponses = []
         auteurs = []
+        boutons_voir_tout = []
 
         for composant in self.composants:
             if composant.is_sondage():
@@ -45,6 +46,10 @@ class composition_ecran:
                 auteurs.append(composant)
                 if verbose:
                     print(f"Auteur {composant.id} ajouté")
+            if composant.is_bouton_voir_tout():
+                boutons_voir_tout.append(composant)
+                if verbose:
+                    print(f"Bouton voir tout {composant.id} ajouté")
 
         for sondage_t in sondages:
             for option_t in options:
@@ -59,6 +64,12 @@ class composition_ecran:
                     auteur_t.donner_parent(sondage_t)
                     if verbose:
                         print(f"Auteur {auteur_t.id} est un fils de sondage {sondage_t.id}")
+            for bouton_voir_tout_t in boutons_voir_tout:
+                if bouton_voir_tout_t.est_contenu_dans(sondage_t.position) > threshold_incl:
+                    sondage_t.ajouter_fils(bouton_voir_tout_t)
+                    bouton_voir_tout_t.donner_parent(sondage_t)
+                    if verbose:
+                        print(f"Bouton voir tout {bouton_voir_tout_t.id} est un fils de sondage {sondage_t.id}")
         
         for option_t in options:
             for voir_t in voir_reponses:

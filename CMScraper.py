@@ -354,8 +354,10 @@ def scroll_down(scroll_type, goto_x=None, goto_y=None):
         if IS_MACOS or IS_XORG:
             if scroll_type == "small":
                 pyautogui.scroll(3)
+                time.sleep(0.5)
             elif scroll_type == "big":
                 pyautogui.scroll(6)
+                time.sleep(0.5)
             else:
                 raise ValueError("TScroll inconnu")
         elif IS_WAYLAND:
@@ -410,7 +412,7 @@ def main_loop(screen_width, screen_height):
     frame_index = 0
     sondages_global = []  # Ensemble des sondages qui ont été vus
 
-    while True and frame_index < 200:  # Limite de frames pour éviter une boucle infinie
+    while True and frame_index < 100:  # Limite de frames pour éviter une boucle infinie
         # Analyse de l'écran
         frame = read_screen()
         frame_index += 1
@@ -445,7 +447,13 @@ def main_loop(screen_width, screen_height):
 
         if sondage_complet is not None:
             # On clique sur le bouton "voir tout"
-            bouton_voir_tout = [fils for fils in sg.fils if fils.is_bouton_voir_tout()] # TODO: implémenter l'ouverture complète du sondage
+            bouton_voir_tout = [fils for fils in sg.fils if fils.is_bouton_voir_tout()]
+            if bouton_voir_tout is not None and len(bouton_voir_tout)>=1:
+                if isinstance(bouton_voir_tout, list):
+                    bouton_voir_tout = bouton_voir_tout[0]
+                x,y,w,h = bouton_voir_tout.position
+                print(bouton_voir_tout.position)
+                simulate_click(x + WINDOW_TOP_LEFT_X, y + WINDOW_TOP_LEFT_Y + OFFSET_DEBUG_Y)
 
             # On lit l'auteur, son texte total et ses options de réponse
             sm = sondage_m()
@@ -515,17 +523,15 @@ def main_loop(screen_width, screen_height):
                 
 
 
-
-
-
-
-    
-
-
 if __name__ == "__main__":
 
     dotenv.load_dotenv()
 
+
+    # Offsets de debug de la fenetre navigateur capturée
+    WINDOW_TOP_LEFT_X = 0 # pos x=0
+    WINDOW_TOP_LEFT_Y = 25 # pos y = 0
+    OFFSET_DEBUG_Y = -100 # Correction à la main TODO: capter d'ou ca vient
 
     # Compatibilité Wayland + Xorg
     IS_MACOS = sys.platform == 'darwin'
