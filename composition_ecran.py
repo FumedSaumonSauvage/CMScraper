@@ -1,3 +1,5 @@
+from data_helper import id_cooker
+
 class composition_ecran:
     """ Classe permettant de gérer et d'organiser les éléments graphiques détectés sur l'écran.
     Chaque composition d'écran correspond à une frame et comporte plusieurs composants (voir définition des composants au dessous)
@@ -23,11 +25,18 @@ class composition_ecran:
     
     def ordonner(self, threshold_incl = 0.9, verbose = False):
         # Pour tous les composants dans la composition, on regarde ceux qui sont imbriqués les uns dans les autres pour définir des fils et des pères.
+        
+        # Composants de sondage classique
         sondages = []
         options = []
         voir_reponses = []
         auteurs = []
         boutons_voir_tout = []
+
+        # Composant d'option_reponse développée
+        boutons_fermer_reponse = []
+        personnes_sondees = []
+        reponses_dev = []
 
         for composant in self.composants:
             if composant.is_sondage():
@@ -50,40 +59,92 @@ class composition_ecran:
                 boutons_voir_tout.append(composant)
                 if verbose:
                     print(f"Bouton voir tout {composant.id} ajouté")
+            if composant.is_bouton_fermer_reponse():
+                boutons_fermer_reponse.append(composant)
+                if verbose:
+                    print(f"Bouton fermer réponse {composant.id} ajouté")
+            if composant.is_personne_sondee():
+                personnes_sondees.append(composant)
+                if verbose:
+                    print(f"Personne sondée {composant.id} ajoutée")
+            if composant.is_reponse_dev():
+                reponses_dev.append(composant)
+                if verbose:
+                    print(f"Réponse dev {composant.id} ajoutée")
 
-        for sondage_t in sondages:
+        traitement_reponse_dev = False # Si on traite les réponses dev, impossible de traiter les sodages qui sont un peu flous derrière.
+        for reponse_t in reponses_dev:
+            traitement_reponse_dev = True
+            for bouton_fermer_t in boutons_fermer_reponse:
+                if bouton_fermer_t.est_contenu_dans(reponse_t.position) > threshold_incl:
+                    reponse_t.ajouter_fils(bouton_fermer_t)
+                    bouton_fermer_t.donner_parent(reponse_t)
+                    if verbose:
+                        print(f"Bouton fermer réponse {bouton_fermer_t.id} est un fils de réponse {reponse_t.id}")
+            for personne_sondee_t in personnes_sondees:
+                if personne_sondee_t.est_contenu_dans(reponse_t.position) > threshold_incl:
+                    reponse_t.ajouter_fils(personne_sondee_t)
+                    personne_sondee_t.donner_parent(reponse_t)
+                    if verbose:
+                        print(f"Personne sondée {personne_sondee_t.id} est un fils de réponse {reponse_t.id}")
+
+        # On ne traite les sondages que si on n'a pas de reponse dev
+        if not traitement_reponse_dev:
+            for sondage_t in sondages:
+                for option_t in options:
+                    if option_t.est_contenu_dans(sondage_t.position) > threshold_incl:
+                        sondage_t.ajouter_fils(option_t)
+                        option_t.donner_parent(sondage_t)
+                        if verbose:
+                            print(f"Option {option_t.id} est un fils de sondage {sondage_t.id}")
+                for auteur_t in auteurs:
+                    if auteur_t.est_contenu_dans(sondage_t.position) > threshold_incl:
+                        sondage_t.ajouter_fils(auteur_t)
+                        auteur_t.donner_parent(sondage_t)
+                        if verbose:
+                            print(f"Auteur {auteur_t.id} est un fils de sondage {sondage_t.id}")
+                for bouton_voir_tout_t in boutons_voir_tout:
+                    if bouton_voir_tout_t.est_contenu_dans(sondage_t.position) > threshold_incl:
+                        sondage_t.ajouter_fils(bouton_voir_tout_t)
+                        bouton_voir_tout_t.donner_parent(sondage_t)
+                        if verbose:
+                            print(f"Bouton voir tout {bouton_voir_tout_t.id} est un fils de sondage {sondage_t.id}")
+            
             for option_t in options:
-                if option_t.est_contenu_dans(sondage_t.position) > threshold_incl:
-                    sondage_t.ajouter_fils(option_t)
-                    option_t.donner_parent(sondage_t)
-                    if verbose:
-                        print(f"Option {option_t.id} est un fils de sondage {sondage_t.id}")
-            for auteur_t in auteurs:
-                if auteur_t.est_contenu_dans(sondage_t.position) > threshold_incl:
-                    sondage_t.ajouter_fils(auteur_t)
-                    auteur_t.donner_parent(sondage_t)
-                    if verbose:
-                        print(f"Auteur {auteur_t.id} est un fils de sondage {sondage_t.id}")
-            for bouton_voir_tout_t in boutons_voir_tout:
-                if bouton_voir_tout_t.est_contenu_dans(sondage_t.position) > threshold_incl:
-                    sondage_t.ajouter_fils(bouton_voir_tout_t)
-                    bouton_voir_tout_t.donner_parent(sondage_t)
-                    if verbose:
-                        print(f"Bouton voir tout {bouton_voir_tout_t.id} est un fils de sondage {sondage_t.id}")
-        
-        for option_t in options:
-            for voir_t in voir_reponses:
-                if voir_t.est_contenu_dans(option_t.position) > threshold_incl:
-                    option_t.ajouter_fils(voir_t)
-                    voir_t.donner_parent(option_t)
-                    if verbose:
-                        print(f"Voir réponses {voir_t.id} est un fils de option {option_t.id}")
+                for voir_t in voir_reponses:
+                    if voir_t.est_contenu_dans(option_t.position) > threshold_incl:
+                        option_t.ajouter_fils(voir_t)
+                        voir_t.donner_parent(option_t)
+                        if verbose:
+                            print(f"Voir réponses {voir_t.id} est un fils de option {option_t.id}")
+
+    def sondage_mode(self):
+        # Renvoie True si la composition d'écran est un sondage, False sinon
+        for racine in self.get_racines_sondage():
+            if racine.is_sondage():
+                return True
+        return False
+    
+    def reponse_dev_mode(self):
+        # Renvoie True si la composition d'écran est une réponse dev, False sinon
+        for racine in self.get_racines_reponse_dev():
+            if racine.is_reponse_dev():
+                return True
+        return False
 
     def get_racines_sondage(self):
         # Renvoie les racines (mais que les sondages)
         racines = []
         for composant in self.composants:
             if composant.is_sondage() and not composant.a_un_parent():
+                racines.append(composant)
+        return racines
+    
+    def get_racines_reponse_dev(self):
+        # Renvoie les racines (mais que les réponses dev)
+        racines = []
+        for composant in self.composants:
+            if composant.is_reponse_dev() and not composant.a_un_parent():
                 racines.append(composant)
         return racines
 
@@ -338,23 +399,4 @@ class auteur_sondage(composant):
             
 
 
-class id_cooker:
-    """ Singleton to build unique ids"""
 
-    _instance = None
-    _counter = 0
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(id_cooker, cls).__new__(cls)
-        return cls._instance
-    
-    @classmethod
-    def get_instance(cls):
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
-
-    def get_new_id(self):
-        self._counter += 1
-        return self._counter

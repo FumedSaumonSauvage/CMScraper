@@ -12,7 +12,7 @@ import re
 from Levenshtein import distance as levenshtein_distance
 import time
 import sys
-import data_helper
+from data_helper import correlation_txt, write_to_json_file, PeopleDatabase
 
 
 def verbose(level):
@@ -172,13 +172,6 @@ def detecter_bboxes(frame):
     results = model(frame)
     return results[0].boxes
 
-def write_to_json_file(data, filename):
-    try:
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
-    except Exception as e:
-        print(f"Erreur ecriture Json: {e}")
-
 def OCR(composant_graph, frame, confiance = 10):
     # On fait de l'OCR sur le composant précisément: selon le type, différentes stratégies
 
@@ -290,6 +283,24 @@ def OCR(composant_graph, frame, confiance = 10):
             return taux
         else:
             return None
+        
+    elif composant_graph.is_personne_sondee():
+        x, y, w, h = composant_graph.position
+        x1, y1, x2, y2 = int(x - w / 2), int(y - h / 2), int(x + w / 2), int(y + h / 2)
+
+        # On mange qqs px sur la gauche pour éviter de capturer l'image de profil
+        x1 += 30 # TODO: paramétrer et mettre dans config
+        
+        cropped_frame = frame[y1:y2, x1:x2]
+
+        # Quantization + upscaling
+        scale_factor = 2 
+        upscaled_frame = cv2.resize(cropped_frame, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
+
+        text = pytesseract.image_to_string(upscaled_frame)
+        # Lire seulement la première ligne
+        first_line = text.split('\n')[0]
+        return first_line
     
 
 def correlation_sondage(sondageA, sondageB, seuil = 0.3):
@@ -298,10 +309,10 @@ def correlation_sondage(sondageA, sondageB, seuil = 0.3):
     if sondageA is None or sondageB is None:
         return False
 
-    if not data_helper.correlation_txt(sondageA.get_description(), sondageB.get_description(), seuil*2):
+    if not correlation_txt(sondageA.get_description(), sondageB.get_description(), seuil*2):
         return False
     
-    if not data_helper.correlation_txt(sondageA.get_auteur(), sondageB.get_auteur(), seuil):
+    if not correlation_txt(sondageA.get_auteur(), sondageB.get_auteur(), seuil):
         return False
     
     return True # On considère que deux sondages sont identiques s'ils portent le même auteur et la même description
@@ -341,6 +352,20 @@ def verifier_vision_sondage(composant_graph, frame, padding_minimal = 50):
         # Si on arrive ici, le sondage est complet
         return True
     return False
+
+def nettoyer_sondages(pack_de_sondages):
+    """ Nettoie une liste de sondage_m en enlevant:
+        - Les option svues une seule fois"""
+    for sondage in pack_de_sondages:
+        options_to_remove = []
+        for option in sondage.options:
+            if option.description.number_of_versions() == 1 and len(option.get_description()) <= 1:
+                options_to_remove.append(option)
+        for option in options_to_remove:
+            sondage.options.remove(option)
+    return pack_de_sondages
+
+
 
 def scroll_down(scroll_type, goto_x=None, goto_y=None):
     """
@@ -412,6 +437,11 @@ def main_loop(screen_width, screen_height):
     frame_index = 0
     sondages_global = []  # Ensemble des sondages qui ont été vus
 
+    # Variablede mémorisation réponse_dev
+    last_names_reponse_dev = [] # Stocke les derniers ID de répondants. Utile pour vérifier la fin de scroll en reponse dev
+    temp_last_names_reponse_dev = [] # Stocke les derniers noms de répondants. Utile pour vérifier la fin de scroll en reponse dev
+    last_option_clicked = None #Sert pour l'association aux reponse_dev
+
     while True and frame_index < 100:  # Limite de frames pour éviter une boucle infinie
         # Analyse de l'écran
         frame = read_screen()
@@ -431,94 +461,150 @@ def main_loop(screen_width, screen_height):
         enregistrer_frame(debug_exporter_composition_as_frame(composition, screen_height, screen_width), f"debug/analyses/test{frame_index}.png")
         enregistrer_frame(frame, f"debug/raw/test{frame_index}.png")
         
-        
-        # Le sondage est-il complet?
-        sondages_graph = composition.get_racines_sondage()
-        sondage_complet = None 
-        for sg in sondages_graph:
-            if verifier_vision_sondage(sg, frame):
-                sondage_complet = sg.id
-                print(f"Sondage complet trouvé: {sg.id}")
-                break
-            else:
-                print(f"Trouvé: sondage incomplet à la passe {frame_index}")
-                scroll_down("small")
-                continue
+        if composition.reponse_dev_mode():
+            end_of_resp_list = False
+            while not end_of_resp_list:
+                current_repondents_on_screen = [] # Pour vérifier qu'on est pas au bout
 
-        if sondage_complet is not None:
-            # On clique sur le bouton "voir tout"
-            bouton_voir_tout = [fils for fils in sg.fils if fils.is_bouton_voir_tout()]
-            if bouton_voir_tout is not None and len(bouton_voir_tout)>=1:
-                if isinstance(bouton_voir_tout, list):
-                    bouton_voir_tout = bouton_voir_tout[0]
-                x,y,w,h = bouton_voir_tout.position
-                print(bouton_voir_tout.position)
+                for compo in reponses_dev_graph.fils: # Lecture et ajout des gens
+                    if compo.is_personne_sondee():
+                        personne = OCR(compo, frame)
+                        if personne is None or personne == "":
+                            print("Personne sondée sans nom, ignorée")
+                            continue
+                        else:
+                            print(f"Personne sondée: {personne}")
+                            id_personne = PeopleDatabase.get_instance().get_id_from_name(personne)
+                            if id_personne is None:
+                                print(f"Personne sondée non existante. Ajout à la BDD")
+                                id_personne = PeopleDatabase.get_instance().add_person_from_name(personne)
+                            else:
+                                print(f"Personne sondée existante: {id_personne}")
+
+                            current_repondents_on_screen.append(id_personne)
+
+                            # Ajout de l'ID sur l'option qui correspond
+                            if last_option_clicked:
+                                last_option_clicked.ajouter_respondent(id_personne)
+                            else:
+                                print("Warning: last_option_clicked is None, cannot associate respondent.")
+
+                # Comparaison des répondants précédents et actuels pour vérifier le scroll
+                if set(current_repondents_on_screen) == set(temp_last_names_reponse_dev):
+                    print("Fin de la liste des répondants!")
+                    end_of_resp_list = True
+                else:
+                    # Si il y en a des nouveaux, on update la liste et on scrolle pour voir si on est au bout
+                    temp_last_names_reponse_dev = current_repondents_on_screen.copy()
+                    print(f"Scrollage en mode reponse_dev. Nouveaux: {len(current_repondents_on_screen)}")
+                    scroll_down("small")
+                    frame = read_screen()
+                    composition = analyse_frames(frame)
+                    reponses_dev_graph = composition.get_racines_reponse_dev()[0]
+
+                    if reponses_dev_graph is None:
+                        print("UB si la liste de reponses dev est étonnamment vide")
+                        end_of_resp_list = True
+
+            temp_last_names_reponse_dev = []
+
+            # Sortie de la boucle de lecture, fermeture de fenetre
+            bouton_fermer = [compo for compo in composition.get_all_composants() if compo.is_bouton_fermer_reponse()]
+            if bouton_fermer:
+                bouton_fermer = bouton_fermer[0]
+                x, y, w, h = bouton_fermer.position
                 simulate_click(x + WINDOW_TOP_LEFT_X, y + WINDOW_TOP_LEFT_Y + OFFSET_DEBUG_Y)
+                print("Clic sur 'bouton_fermer_reponse'.")
+                time.sleep(0.2)
+                frame = read_screen()
+                composition = analyse_frames(frame)
+                last_option_clicked = None
 
-            # On lit l'auteur, son texte total et ses options de réponse
-            sm = sondage_m()
-            descr = OCR(sg, frame)
-            if descr is None or descr == "":
-                print("Sondage sans description, ignoré")
-                scroll_down("small")
-                break
-            else:
-                sm.ajouter_description(descr)
 
-            auteur = [fils for fils in sg.fils if fils.is_auteur_sondage()]
-            if auteur:
-                sm.ajouter_auteur(OCR(auteur[0], frame))
-            else:
-                break # Pas d'auteur, on passe au sondage suivant
-            
-            options = [fils for fils in sg.fils if fils.is_option_reponse()]
-            for option in options:
-                # Tout pourri quand le texte a 2 lignes, TODO refaire cette fonction
-                om = option_m()
-                descr_option = OCR(option, frame)
-                om.ajouter_description(descr_option)
-                # Recherche du taux
-                if option.fils is not None:
-                    voir_rep_op = [vro for vro in option.fils if vro.is_voir_reponses_option()]
-                    if len(voir_rep_op) == 1:
-                        om.taux = OCR(voir_rep_op[0], frame)
-                        print(f"Taux: {om.taux}")
-                sm.ajouter_option(om)
-
-            # On vérifie si le sondage existe déjà dans la base de données (on ne vérif que les 10 derniers)
-            sondage_m_prec = None
-            for sondage in sondages_global[-10:]:
-                if correlation_sondage(sondage, sm):
-                    sondage_m_prec = sondage
-                    print("Sondage precedent trouvé")
+        elif composition.sondage_mode(): # Evite d'etre en mode sondage et de rester "bloqué" entre 2 sondages non complets
+            # Le sondage est-il complet?
+            sondages_graph = composition.get_racines_sondage()
+            sondage_complet = None 
+            for sg in sondages_graph:
+                if verifier_vision_sondage(sg, frame):
+                    sondage_complet = sg.id
+                    print(f"Sondage complet trouvé: {sg.id}")
                     break
+                else:
+                    print(f"Trouvé: sondage incomplet à la passe {frame_index}")
+                    scroll_down("small")
+                    continue
 
-            if sondage_m_prec is not None: # Si on a trouvé un sondage précédent
-                # On met à jour le sondage existant
-                print(f"Sondage déjà existant: {sondage_m_prec.id}, mise à jour")
-                for desc in sm.description.get_all_versions(): # Ajout de la ou les descriptions vues
-                    sondage_m_prec.ajouter_description(desc)
+            if sondage_complet is not None:
+                # On clique sur le bouton "voir tout"
+                bouton_voir_tout = [fils for fils in sg.fils if fils.is_bouton_voir_tout()]
+                if bouton_voir_tout is not None and len(bouton_voir_tout)>=1:
+                    if isinstance(bouton_voir_tout, list):
+                        bouton_voir_tout = bouton_voir_tout[0]
+                    x,y,w,h = bouton_voir_tout.position
+                    print(bouton_voir_tout.position)
+                    simulate_click(x + WINDOW_TOP_LEFT_X, y + WINDOW_TOP_LEFT_Y + OFFSET_DEBUG_Y)
 
-                if len(sm.options) > len(sondage_m_prec.options):
-                    for option in sm.options:
-                        sondage_m_prec.ajouter_option(option) # sondage_m gère l'ajout des options et la comparaison avec celles qu'il a deja
+                # On lit l'auteur, son texte total et ses options de réponse
+                sm = sondage_m()
+                descr = OCR(sg, frame)
+                if descr is None or descr == "":
+                    print("Sondage sans description, ignoré")
+                    scroll_down("small")
+                    break
+                else:
+                    sm.ajouter_description(descr)
 
-            else: # Le sondage n'existe pas, ajout à la liste globale
-                print(f"Nouveau sondage trouvé: {sm.get_description()}, auteur: {sm.get_auteur()}")
-                sondages_global.append(sm)
+                auteur = [fils for fils in sg.fils if fils.is_auteur_sondage()]
+                if auteur:
+                    sm.ajouter_auteur(OCR(auteur[0], frame))
+                else:
+                    break # Pas d'auteur, on passe au sondage suivant
+                
+                options = [fils for fils in sg.fils if fils.is_option_reponse()]
+                for option in options:
+                    # Tout pourri quand le texte a 2 lignes, TODO refaire cette fonction
+                    om = option_m()
+                    descr_option = OCR(option, frame)
+                    om.ajouter_description(descr_option)
+                    # Recherche du taux
+                    if option.fils is not None:
+                        voir_rep_op = [vro for vro in option.fils if vro.is_voir_reponses_option()]
+                        if len(voir_rep_op) == 1:
+                            om.taux = OCR(voir_rep_op[0], frame)
+                            print(f"Taux: {om.taux}")
+                    sm.ajouter_option(om)
 
-            scroll_down("small")
+                # On vérifie si le sondage existe déjà dans la base de données (on ne vérif que les 10 derniers)
+                sondage_m_prec = None
+                for sondage in sondages_global[-10:]:
+                    if correlation_sondage(sondage, sm):
+                        sondage_m_prec = sondage
+                        print("Sondage precedent trouvé")
+                        break
 
-            
-    
-        else:
-            scroll_down("small")
+                if sondage_m_prec is not None: # Si on a trouvé un sondage précédent
+                    # On met à jour le sondage existant
+                    print(f"Sondage déjà existant: {sondage_m_prec.id}, mise à jour")
+                    for desc in sm.description.get_all_versions(): # Ajout de la ou les descriptions vues
+                        sondage_m_prec.ajouter_description(desc)
 
-    # Exporter les sondages en JSON une fois à la fin
-    data = {
-        "sondages": [sondage.to_dict_smpl() for sondage in sondages_global]
-    }
+                    if len(sm.options) > len(sondage_m_prec.options):
+                        for option in sm.options:
+                            sondage_m_prec.ajouter_option(option) # sondage_m gère l'ajout des options et la comparaison avec celles qu'il a deja
 
+                else: # Le sondage n'existe pas, ajout à la liste globale
+                    print(f"Nouveau sondage trouvé: {sm.get_description()}, auteur: {sm.get_auteur()}")
+                    sondages_global.append(sm)
+
+                scroll_down("small")
+
+            else: # Si on n'est ni en mode reponse ni en mode sondage (?)
+                scroll_down("small")
+
+    # Export
+    sondages_global = nettoyer_sondages(sondages_global)
+    data = {"sondages": [sondage.to_dict_smpl() for sondage in sondages_global]}
     write_to_json_file(data, "debug/sondages.json")
                 
 
