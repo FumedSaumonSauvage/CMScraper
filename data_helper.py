@@ -1,5 +1,5 @@
 # Classe singleton qui gère le json
-# Étendu en classe d'outils pour traiter les données
+# Étendu en classe d'outils pour traiter les données (énorme pot pourri, TODO nettoyer)
 
 import json
 from Levenshtein import distance as levenshtein_distance

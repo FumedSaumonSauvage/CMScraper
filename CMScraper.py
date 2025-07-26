@@ -379,12 +379,11 @@ def scroll_down(scroll_type, goto_x=None, goto_y=None):
         if IS_MACOS or IS_XORG:
             if scroll_type == "small":
                 pyautogui.scroll(3)
-                time.sleep(0.5)
             elif scroll_type == "big":
                 pyautogui.scroll(6)
-                time.sleep(0.5)
             else:
-                raise ValueError("TScroll inconnu")
+                raise ValueError("Scroll inconnu")
+            time.sleep(0.9)
         elif IS_WAYLAND:
             if scroll_type == "small":
                 _wayland_mouse_controller.scroll(-100) # Valeurs douteuses
@@ -403,6 +402,7 @@ def simulate_click(x_screen, y_screen, button='left', clicks=1, interval=0.1):
     print(f"Cliquage à ({x_screen}, {y_screen}) avec le bouton {button}, {clicks} fois.")
     if IS_MACOS or IS_XORG:
         pyautogui.click(x=x_screen, y=y_screen, button=button, clicks=clicks, interval=interval)
+        time.sleep(10) # debug
     elif IS_WAYLAND:
         move_mouse_to(x_screen, y_screen)
         for _ in range(clicks):
@@ -513,7 +513,7 @@ def main_loop(screen_width, screen_height):
             if bouton_fermer:
                 bouton_fermer = bouton_fermer[0]
                 x, y, w, h = bouton_fermer.position
-                simulate_click(x + WINDOW_TOP_LEFT_X, y + WINDOW_TOP_LEFT_Y + OFFSET_DEBUG_Y)
+                simulate_click((x + WINDOW_TOP_LEFT_X)*OFFSET_FACTOR_X, (y + WINDOW_TOP_LEFT_Y)*OFFSET_FACTOR_Y)
                 print("Clic sur 'bouton_fermer_reponse'.")
                 time.sleep(0.2)
                 frame = read_screen()
@@ -536,6 +536,9 @@ def main_loop(screen_width, screen_height):
                     continue
 
             if sondage_complet is not None:
+
+                clicked_on_voir_reponses = False # Pilote le scroll plus tard
+
                 # On clique sur le bouton "voir tout"
                 bouton_voir_tout = [fils for fils in sg.fils if fils.is_bouton_voir_tout()]
                 if bouton_voir_tout is not None and len(bouton_voir_tout)>=1:
@@ -543,7 +546,7 @@ def main_loop(screen_width, screen_height):
                         bouton_voir_tout = bouton_voir_tout[0]
                     x,y,w,h = bouton_voir_tout.position
                     print(bouton_voir_tout.position)
-                    simulate_click(x + WINDOW_TOP_LEFT_X, y + WINDOW_TOP_LEFT_Y + OFFSET_DEBUG_Y)
+                    simulate_click((x + WINDOW_TOP_LEFT_X)*OFFSET_FACTOR_X, (y + WINDOW_TOP_LEFT_Y)*OFFSET_FACTOR_Y)
 
                 # On lit l'auteur, son texte total et ses options de réponse
                 sm = sondage_m()
@@ -573,7 +576,26 @@ def main_loop(screen_width, screen_height):
                         if len(voir_rep_op) == 1:
                             om.taux = OCR(voir_rep_op[0], frame)
                             print(f"Taux: {om.taux}")
-                    sm.ajouter_option(om)
+                    option_deja_vue = sm.ajouter_option(om)
+
+                    if not option_deja_vue:
+                        print(f"Nouvelle option de réponse détectée: '{descr_option}'")
+                        last_option_clicked = om 
+
+                        if len(voir_rep_op) == 1:
+                            vro_component = voir_rep_op[0]
+                            x, y, _, _ = vro_component.position
+                            print(f"Clic sur 'voir_reponses_option' pour '{descr_option}' à ({x}, {y}).")
+                            simulate_click((x + WINDOW_TOP_LEFT_X)*OFFSET_FACTOR_X, (y + WINDOW_TOP_LEFT_Y)*OFFSET_FACTOR_Y)
+                            
+                            clicked_on_voir_reponses = True
+                            time.sleep(0.5) # Délai pour laisser le temps de charger les options
+                            break
+                        else:
+                            print(f"Pas de bouton 'voir_reponses_option' trouvé pour l'option '{descr_option}'.")
+                    else:
+                        print(f"Option de réponse déjà vue: '{descr_option}'")
+
 
                 # On vérifie si le sondage existe déjà dans la base de données (on ne vérif que les 10 derniers)
                 sondage_m_prec = None
@@ -616,8 +638,12 @@ if __name__ == "__main__":
 
     # Offsets de debug de la fenetre navigateur capturée
     WINDOW_TOP_LEFT_X = 0 # pos x=0
-    WINDOW_TOP_LEFT_Y = 25 # pos y = 0
-    OFFSET_DEBUG_Y = -100 # Correction à la main TODO: capter d'ou ca vient
+    WINDOW_TOP_LEFT_Y = 0 # 25 # pos y = 0
+
+    # Correction à la main TODO: capter d'ou ca vient
+    OFFSET_DEBUG_Y = 0 # -100 
+    OFFSET_FACTOR_X = 0.9 # Vraie position selon X = position détectée * OFFSET_FACTOR_X
+    OFFSET_FACTOR_Y = 0.94 # Idem
 
     # Compatibilité Wayland + Xorg
     IS_MACOS = sys.platform == 'darwin'

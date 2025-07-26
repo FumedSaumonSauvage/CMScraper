@@ -18,8 +18,9 @@ class sondage_m:
         self.choix_unique = None
         self.options = [] # Tableau d'options
 
-    def ajouter_option(self, option):
+    def ajouter_option(self, option) -> bool:
         # Ajoute l'option en vérifiant si on l'a déjà. Si oui, pas la peine de l'ajouter.
+        # Si l'option avait té déjà ajoutée, on l'explicite en sortie
         match_found = False
         for i, option_ex in enumerate(self.options):
             if data_helper.correlation_txt(option_ex.get_description(), option.get_description(), 0.2): # Si une option similaire est trouvée
@@ -28,6 +29,7 @@ class sondage_m:
                 break
         if not match_found:
             self.options.append(option)
+        return match_found
 
     def ajouter_description(self, description):
         self.description.add_version(description)
